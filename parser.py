@@ -1,9 +1,11 @@
+import os
 from random import choice
 import requests
 from bs4 import BeautifulSoup
 from commands import add_link, del_link
 from models.models import session, Link
 
+# ПАРСИНГ ПОКА ЧТО В ПОЛУРУЧНОМ РЕЖИМЕ, копирую код страницы в файл test.html. Никак не могу обойти блокировку от Biglion
 
 desktop_agents = ['Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36',
                  'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36',
@@ -21,35 +23,82 @@ def random_headers():
     return {'User-Agent': choice(desktop_agents), 'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'}
 
 
-city = 'Калуга'     # город парсинга
+city = 'Казань'     # город парсинга
 category = 'Здоровье'   # категория парсинга: 'Красота', 'Рестораны', 'Здоровье', 'Развлечения', 'Авто', 'Дети', 'Разное', 'Отели'
-domen = 'https://kaluga.biglion.ru'  # домен для итоговой ссылки
-url = 'https://webcache.googleusercontent.com/search?q=cache:noodtlQOA9IJ:https://kaluga.biglion.ru/services/health/&cd=8&hl=ru&ct=clnk&gl=ru'  # ссылка для парсинга
+domen = 'https://kazan.biglion.ru'  # поддомен для итоговой ссылки на акцию
 
 
-r = requests.get(url, headers=random_headers(), timeout=20)
-soup_ing = str(BeautifulSoup(r.content, 'lxml'))
-soup_ing = soup_ing.encode()
-with open("test.html", "wb") as file:
-    file.write(soup_ing)
+# url = 'view-source:https://kaluga.biglion.ru/services/'  # ссылка из кеша гугла или яндекса для парсинга
+# r = requests.get(url, headers=random_headers(), timeout=20)
+# soup_ing = str(BeautifulSoup(r.content, 'lxml'))
+# soup_ing = soup_ing.encode()
+# with open("test.html", "wb") as file:
+#     file.write(soup_ing)
 
-s = set()  # множество для добавление напарсинных ссылок
+link_data = []   # список с ссылками
+img_data = []   # список с путем до картинки
+title_data = []  # список с названиями
 
 
-def fromSoup():
+# Парсим ссылки
+def fromSoupLink():
     html_file = ("test.html")
     html_file = open(html_file, encoding='UTF-8').read()
     soup = BeautifulSoup(html_file, 'lxml')
     c = '/deals/'
     for link in soup.find_all('a'):
         if c in str(link.get('href'))[:7]:
-            s.add(domen + link.get('href') + '?utm_campaign=p4793100&utm_medium=cpa&utm_source=p4793100')  # формируем и добавляем итоговые ссылки
+            link_finish = domen + link.get('href') + '?utm_campaign=p4793100&utm_medium=cpa&utm_source=p4793100' # Формируем итоговую ссылку на акцию
+            if link_finish not in link_data:
+                link_data.append(link_finish)  # Добавляем в список с ссылками
 
 
-fromSoup()
+# Парсим картинки
+def fromSoupIMG():
+    html_file = ("test.html")
+    html_file = open(html_file, encoding='UTF-8').read()
+    soup = BeautifulSoup(html_file, 'lxml')
+    if not os.path.exists(f'media\{city}'):  # Проверяем есть ли каталог с городом. Если нет, то создаём его
+        os.mkdir(f'media\{city}')
+    if not os.path.exists(f'media\{city}\{category}'): # Проверяем есть ли каталог с категорией. Если нет, то создаём его
+        os.mkdir(f'media\{city}\{category}')
+    g = '.jpg'
+    i = 0  # Счётчик для названия картинок. Прибавляется к названию
+    for img in soup.find_all('img'):
+        if g in img.get('data-src'):
+            img = 'https:' + img.get('data-src')  # Формируем ссылку на картинку
+            img_data.append(f'media\{city}\{category}\img{i+1}.jpg')  # Добавляем в список с картинками
 
-del_link(city, category) # каждый раз очищаем таблицу по выбранному городу и категории
+            p = requests.get(img)
+            with open(f'media\{city}\{category}\img{i+1}.jpg', "wb") as out: # Скачиваем картинку себе в соответсвующий каталог Город/Категория
+                out.write(p.content)
+                out.close()
+                i = i + 1
 
+
+# Парсим названия
+def fromSoupTitle():
+    html_file = ("test.html")
+    html_file = open(html_file, encoding='UTF-8').read()
+    soup = BeautifulSoup(html_file, 'lxml')
+    g = '.jpg'
+    for title in soup.find_all('img'):
+        if g in title.get('data-src'):
+            if title.get('alt') not in title_data:
+                title_data.append(title.get('alt'))  # Добавляем в список с названиями
+
+
+fromSoupLink()
+fromSoupIMG()
+fromSoupTitle()
+
+del_link(city, category)  # Каждый раз очищаем таблицу для выбранного города и категории
+
+
+# Добавляем в таблицу напарсенные данные из списков: Ссылка, Картинка, Название
 link = session.query(Link).all()
-for i in s:
-    add_link(i, city, category)   # добавляе актуальные ссылки по выбранному городу и категории
+el = 0 # Счётчик для передобора по таблице
+for link_name in link_data:
+    if el < len(title_data):
+        add_link(link_name, img_data[el], title_data[el], city, category)
+        el = el + 1

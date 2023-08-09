@@ -31,6 +31,8 @@ class Link(Base):
 
     id = Column(Integer, primary_key=True)
     name_link = Column(String, nullable=False)
+    img_link = Column(String, nullable=False)
+    name_sale = Column(String, nullable=False)
     city_id = Column(Integer, ForeignKey("cities.id"))
     cat_id = Column(Integer, ForeignKey("category.id"))
     city_link = relationship("City", backref="city_link")

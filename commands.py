@@ -30,11 +30,11 @@ def add_category(category):
 
 
 # Добавляем ссылки в таблицу
-def add_link(link, city, cat):
+def add_link(link, img_link, name_sale, city, cat):
     city = session.query(City).filter(City.city == city).first()
     cat = session.query(Category).filter(Category.cat == cat).first()
 
-    link_name = Link(name_link=link, city_id=city.id, cat_id=cat.id)
+    link_name = Link(name_link=link, img_link=img_link, name_sale=name_sale, city_id=city.id, cat_id=cat.id)
     session.add(link_name)
 
     try:
